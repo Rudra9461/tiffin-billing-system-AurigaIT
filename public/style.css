@@ -349,3 +349,25 @@ a.btn:hover {
 .search-bar select { flex: 1 1 140px; min-width: 120px; }
 .form-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 .form-row input, .form-row select { width: auto; flex: 1 1 160px; }
+
+#custMsg, #detailBody .msg {
+  margin-top: 10px;
+}
+#custMsg p.success {
+  background: var(--leaf-bg);
+  color: var(--leaf);
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 0.87rem;
+  font-weight: 600;
+  margin: 10px 0 0;
+}
+#custMsg p.error {
+  background: var(--terracotta-bg);
+  color: var(--terracotta);
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 0.87rem;
+  font-weight: 600;
+  margin: 10px 0 0;
+}
