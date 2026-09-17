@@ -81,6 +81,22 @@ Server runs at `http://localhost:3000`. In GitHub Codespaces, use the forwarded 
 | POST | `/api/subscriptions/:id/resume` | Resume service (`end_date`, defaults to today) |
 | GET | `/api/subscriptions/:id/bill?month=YYYY-MM` | Get pro-rated bill for a month |
 
+### Subscription Transfer (T6)
+| Method | Endpoint | Description |
+|---|---|---|
+| POST | `/api/subscriptions/:id/transfer` | Transfer subscription to a new customer mid-cycle. Billing for that month splits between old and new customer based on who was served each day. |
+
+### Notifications (T1)
+| Method | Endpoint | Description |
+|---|---|---|
+| POST | `/api/clock` | Advance simulated "today" (`{date: YYYY-MM-DD}`). Notifies all active, non-paused customers due for delivery that day (weekdays only). Idempotent — repeat calls for the same date don't re-notify. |
+| GET | `/api/outbox?date=YYYY-MM-DD` | View notifications sent (optionally filtered by date). |
+
+### Bulk Import (T4)
+| Method | Endpoint | Description |
+|---|---|---|
+| POST | `/api/customers/import` | Bulk import customers from messy data (`{rows: [...]}`). Handles duplicate phones, mixed date formats (`YYYY-MM-DD`, `DD/MM/YYYY`), and missing fields. Returns `{ summary, imported, deduped, rejected }` with reasons for every skipped row. |
+
 ## Example API Requests
 
 **Register**
@@ -123,3 +139,7 @@ Response:
 - `bill = daily_rate × served_weekdays`
 - Weekend pauses have no billing effect (weekends were never billed).
 - Pauses are capped to the subscription's active window within the billed month (handles pause-before-subscription, pause-covering-rest-of-month, etc.). See `REASONING.md` for full edge case handling.
+## Twist Features Implemented
+1. **T1 (Notification):** `/api/clock` simulates the passage of a day; on each call, active/non-paused/weekday-due customers get a notification logged to `/api/outbox`. Duplicate calls for the same date are idempotent (DB unique constraint on `subscription_id + delivery_date`).
+2. **T6 (Lifecycle):** `/api/subscriptions/:id/transfer` moves a subscription to a new customer mid-cycle without resetting the plan or start date. Billing is tracked via an ownership-segment table and split day-by-day between old and new customer in the bill response (`splitByCustomer`).
+3. **T4 (Messy Data):** `/api/customers/import` accepts raw rows, normalizes phone numbers and dates (`YYYY-MM-DD` or `DD/MM/YYYY`), rejects invalid/incomplete rows with explicit reasons, and dedupes both within the batch and against existing customers.
