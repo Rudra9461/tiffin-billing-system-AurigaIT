@@ -129,6 +129,116 @@ app.get('/api/customers-status/summary', authMiddleware, (req, res) => {
   res.json({ active, paused, noSubscription: noSub, counts: { active: active.length, paused: paused.length, noSubscription: noSub.length } });
 });
 
+const { calculateBill } = require('./billing');
+
+// SUBSCRIBE
+app.post('/api/subscriptions', authMiddleware, (req, res) => {
+  const { customer_id, plan_name, plan_price, start_date } = req.body;
+  if (!customer_id || !plan_name || !plan_price || !start_date) {
+    return res.status(400).json({ error: 'customer_id, plan_name, plan_price, start_date are required' });
+  }
+  if (isNaN(Date.parse(start_date))) {
+    return res.status(400).json({ error: 'Invalid start_date' });
+  }
+  if (plan_price <= 0) {
+    return res.status(400).json({ error: 'plan_price must be positive' });
+  }
+
+  const customer = db.prepare('SELECT * FROM customers WHERE id = ? AND owner_id = ?')
+    .get(customer_id, req.user.id);
+  if (!customer) return res.status(404).json({ error: 'Customer not found' });
+
+  const result = db.prepare(
+    'INSERT INTO subscriptions (customer_id, plan_name, plan_price, start_date, status) VALUES (?, ?, ?, ?, ?)'
+  ).run(customer_id, plan_name, plan_price, start_date, 'active');
+
+  const subscription = db.prepare('SELECT * FROM subscriptions WHERE id = ?').get(result.lastInsertRowid);
+  res.status(201).json(subscription);
+});
+
+// PAUSE
+app.post('/api/subscriptions/:id/pause', authMiddleware, (req, res) => {
+  const { start_date, end_date } = req.body;
+  if (!start_date) return res.status(400).json({ error: 'start_date is required' });
+  if (isNaN(Date.parse(start_date))) return res.status(400).json({ error: 'Invalid start_date' });
+  if (end_date && isNaN(Date.parse(end_date))) return res.status(400).json({ error: 'Invalid end_date' });
+  if (end_date && end_date < start_date) return res.status(400).json({ error: 'end_date cannot be before start_date' });
+
+  const sub = db.prepare(`
+    SELECT s.* FROM subscriptions s
+    JOIN customers c ON c.id = s.customer_id
+    WHERE s.id = ? AND c.owner_id = ?
+  `).get(req.params.id, req.user.id);
+  if (!sub) return res.status(404).json({ error: 'Subscription not found' });
+
+  // Duplicate pause check: an open pause (still ongoing) already exists
+  const openPause = db.prepare(
+    'SELECT * FROM pauses WHERE subscription_id = ? AND end_date IS NULL'
+  ).get(sub.id);
+  if (openPause) {
+    return res.status(409).json({ error: 'Subscription already paused. Resume before pausing again.', openPause });
+  }
+
+  const result = db.prepare(
+    'INSERT INTO pauses (subscription_id, start_date, end_date) VALUES (?, ?, ?)'
+  ).run(sub.id, start_date, end_date || null);
+
+  db.prepare('UPDATE subscriptions SET status = ? WHERE id = ?').run('paused', sub.id);
+
+  const pause = db.prepare('SELECT * FROM pauses WHERE id = ?').get(result.lastInsertRowid);
+  res.status(201).json(pause);
+});
+
+// RESUME
+app.post('/api/subscriptions/:id/resume', authMiddleware, (req, res) => {
+  const { end_date } = req.body;
+  const today = new Date().toISOString().slice(0, 10);
+  const resumeDate = end_date || today;
+
+  if (isNaN(Date.parse(resumeDate))) return res.status(400).json({ error: 'Invalid end_date' });
+
+  const sub = db.prepare(`
+    SELECT s.* FROM subscriptions s
+    JOIN customers c ON c.id = s.customer_id
+    WHERE s.id = ? AND c.owner_id = ?
+  `).get(req.params.id, req.user.id);
+  if (!sub) return res.status(404).json({ error: 'Subscription not found' });
+
+  const openPause = db.prepare(
+    'SELECT * FROM pauses WHERE subscription_id = ? AND end_date IS NULL'
+  ).get(sub.id);
+  if (!openPause) {
+    return res.status(400).json({ error: 'No active pause to resume from' });
+  }
+  if (resumeDate < openPause.start_date) {
+    return res.status(400).json({ error: 'end_date cannot be before the pause start_date' });
+  }
+
+  db.prepare('UPDATE pauses SET end_date = ? WHERE id = ?').run(resumeDate, openPause.id);
+  db.prepare('UPDATE subscriptions SET status = ? WHERE id = ?').run('active', sub.id);
+
+  const pause = db.prepare('SELECT * FROM pauses WHERE id = ?').get(openPause.id);
+  res.json(pause);
+});
+
+// BILL
+app.get('/api/subscriptions/:id/bill', authMiddleware, (req, res) => {
+  const month = req.query.month || new Date().toISOString().slice(0, 7); // 'YYYY-MM'
+  if (!/^\d{4}-\d{2}$/.test(month)) return res.status(400).json({ error: 'month must be in YYYY-MM format' });
+
+  const sub = db.prepare(`
+    SELECT s.* FROM subscriptions s
+    JOIN customers c ON c.id = s.customer_id
+    WHERE s.id = ? AND c.owner_id = ?
+  `).get(req.params.id, req.user.id);
+  if (!sub) return res.status(404).json({ error: 'Subscription not found' });
+
+  const pauses = db.prepare('SELECT start_date, end_date FROM pauses WHERE subscription_id = ?').all(sub.id);
+
+  const result = calculateBill(sub, pauses, month);
+  res.json({ subscription_id: sub.id, plan_price: sub.plan_price, ...result });
+});
+
 
 app.get('/api/health', (req, res) => {
   res.json({ ok: true, message: 'Tiffin Billing API running' });
