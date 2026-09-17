@@ -5,11 +5,14 @@ const path = require('path');
 const bcrypt = require('bcryptjs');
 const db = require('./db');
 const { generateToken, authMiddleware } = require('./auth');
+const { calculateBill } = require('./billing');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
+
+// ==================== AUTH ====================
 
 // REGISTER
 app.post('/api/auth/register', (req, res) => {
@@ -48,6 +51,21 @@ app.post('/api/auth/login', (req, res) => {
   res.json({ user: { id: user.id, name: user.name, email: user.email }, token });
 });
 
+// ==================== CUSTOMERS ====================
+
+// STATUS SUBQUERY (derived live from open pauses, not a stored column)
+const STATUS_SUBQUERY = `
+  (SELECT CASE
+     WHEN EXISTS (
+       SELECT 1 FROM pauses p
+       WHERE p.subscription_id = (SELECT id FROM subscriptions s2 WHERE s2.customer_id = c.id ORDER BY s2.id DESC LIMIT 1)
+       AND p.end_date IS NULL
+     ) THEN 'paused'
+     WHEN (SELECT id FROM subscriptions s2 WHERE s2.customer_id = c.id ORDER BY s2.id DESC LIMIT 1) IS NOT NULL THEN 'active'
+     ELSE NULL
+   END) as status
+`;
+
 // CREATE CUSTOMER
 app.post('/api/customers', authMiddleware, (req, res) => {
   const { name, phone, address } = req.body;
@@ -85,7 +103,7 @@ app.get('/api/customers', authMiddleware, (req, res) => {
 
   const customers = db.prepare(`
     SELECT c.*,
-      (SELECT status FROM subscriptions s WHERE s.customer_id = c.id ORDER BY s.id DESC LIMIT 1) as status
+      ${STATUS_SUBQUERY}
     FROM customers c
     ${whereClause}
     ORDER BY c.${sortCol} ${sortOrder}
@@ -117,7 +135,7 @@ app.get('/api/customers/:id', authMiddleware, (req, res) => {
 app.get('/api/customers-status/summary', authMiddleware, (req, res) => {
   const rows = db.prepare(`
     SELECT c.id, c.name, c.phone,
-      (SELECT status FROM subscriptions s WHERE s.customer_id = c.id ORDER BY s.id DESC LIMIT 1) as status
+      ${STATUS_SUBQUERY}
     FROM customers c
     WHERE c.owner_id = ?
   `).all(req.user.id);
@@ -129,7 +147,7 @@ app.get('/api/customers-status/summary', authMiddleware, (req, res) => {
   res.json({ active, paused, noSubscription: noSub, counts: { active: active.length, paused: paused.length, noSubscription: noSub.length } });
 });
 
-const { calculateBill } = require('./billing');
+// ==================== SUBSCRIPTIONS / PAUSE / RESUME / BILL ====================
 
 // SUBSCRIBE
 app.post('/api/subscriptions', authMiddleware, (req, res) => {
@@ -183,7 +201,12 @@ app.post('/api/subscriptions/:id/pause', authMiddleware, (req, res) => {
     'INSERT INTO pauses (subscription_id, start_date, end_date) VALUES (?, ?, ?)'
   ).run(sub.id, start_date, end_date || null);
 
-  db.prepare('UPDATE subscriptions SET status = ? WHERE id = ?').run('paused', sub.id);
+  // Only mark subscription as currently "paused" if this pause is OPEN (no end_date yet).
+  // A pause logged with both start and end date already known is a historical/planned
+  // record and doesn't mean the customer is paused right now.
+  if (!end_date) {
+    db.prepare('UPDATE subscriptions SET status = ? WHERE id = ?').run('paused', sub.id);
+  }
 
   const pause = db.prepare('SELECT * FROM pauses WHERE id = ?').get(result.lastInsertRowid);
   res.status(201).json(pause);
@@ -239,6 +262,7 @@ app.get('/api/subscriptions/:id/bill', authMiddleware, (req, res) => {
   res.json({ subscription_id: sub.id, plan_price: sub.plan_price, ...result });
 });
 
+// ==================== HEALTH ====================
 
 app.get('/api/health', (req, res) => {
   res.json({ ok: true, message: 'Tiffin Billing API running' });
