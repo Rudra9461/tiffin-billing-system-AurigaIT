@@ -1,8 +1,3 @@
-# AI Conversation Log
-
-Tool used: Claude (Anthropic)
-
----
 I am currently participating in an Auriga IT Round 2 "Builder" placement assessment.
 
 I have STRICTLY 2.5 HOURS to build and submit a working full-stack product in GitHub Codespaces.
@@ -539,200 +534,169 @@ The first thing I should do inside GitHub Codespaces
 Then wait for me to say "NEXT".
 in short points not too much theoritical help me to implement from scratch what to do first by creating repo as
 
-STEP 8 — README.md
-Replace the content of README.md with this (edit env values/URLs as needed):
+All three twists are working correctly, and the numbers hold up:
+
+T1 — Clock/Outbox: ✅ dueToday:1, notifiedCount:1 on first call, notifiedCount:0 on duplicate call with same date — no double notifications, exactly as required.
+
+T6 — Transfer: ✅ Segments correctly split at Sep 15 (customer 1: Sep 1–14, customer 2: Sep 15 onward). Served days split 9+7=16 = matches servedWeekdays:16 from earlier bill. Bill split 1227.27+954.55=2181.82 = matches total bill exactly. Math is airtight.
+
+T4 — Import: ✅ 1 imported, 1 deduped (with clear reason), 3 rejected (each with a specific, distinct reason) — no crashes on any malformed row.
+
+Everything checks out. Commit is already pushed, so we're good.
+
+Commit reminder (if not already done)
+bash
+git status
+If anything is uncommitted:
+
+bash
+git add .
+git commit -m "test: verify T1/T6/T4 twist implementations"
+git push
+STEP — Update README.md with new endpoints
+Add this section to README.md right after the existing "### Subscriptions" table:
 
 markdown
-# 🍱 Tiffin Billing System
-
-A full-stack subscription and pro-rated billing manager for home-style tiffin (lunch delivery) services. Customers are billed only for the weekdays they were actually served — paused days are never charged.
-
-## Product Overview
-Tiffin owners subscribe customers to a monthly plan. Customers are served on weekdays. When a customer pauses service (travel, festivals, etc.), those weekdays are excluded from billing. At month-end, the owner gets an accurate, verifiable, pro-rated bill per customer.
-
-## Features
-- Owner registration & login (JWT auth)
-- Add / manage customers
-- Subscribe customer to a monthly plan
-- Pause / resume service with date ranges
-- Pro-rated bill calculation (weekday-based)
-- Search customers by name/phone
-- Active vs Paused vs No-subscription dashboard view
-- Paginated, sortable customer list
-- Landing page
-
-## Technology Stack
-- **Backend:** Node.js, Express
-- **Database:** SQLite (via `better-sqlite3`) — file-based, persistent, zero external setup
-- **Auth:** JWT (`jsonwebtoken`) + bcrypt password hashing
-- **Frontend:** Vanilla HTML/CSS/JavaScript (no framework, no build step)
-
-## Database Schema
-- `users` — id, name, email (unique), password_hash, created_at
-- `customers` — id, owner_id, name, phone (unique), address, created_at
-- `subscriptions` — id, customer_id, plan_name, plan_price, start_date, status, created_at
-- `pauses` — id, subscription_id, start_date, end_date (NULL = currently paused/open), created_at
-
-Status (active/paused) is **derived live** from whether an open pause (`end_date IS NULL`) exists on the customer's latest subscription — not stored as a separate mutable flag, to avoid drift.
-
-## Environment Variables
-Create a `.env` file in the project root:
-PORT=3000
-JWT_SECRET=your_secret_key_here
-
-
-## Installation & Setup
-```bash
-npm install
-```
-
-## Running the Project
-```bash
-npm run dev     # with nodemon (auto-restart)
-# or
-npm start        # plain node
-```
-Server runs at `http://localhost:3000`. In GitHub Codespaces, use the forwarded URL from the **Ports** tab.
-
-- Landing page: `/`
-- Login/Register: `/login.html`
-- Dashboard: `/dashboard.html`
-
-## Debugging / Common Issues
-- **Blank page in Codespaces:** don't use `localhost` directly — use the forwarded URL from the Ports tab (right-click port 3000 → Open in Browser).
-- **`ReferenceError` in server.js:** usually means the file has stray text pasted in (e.g. shell command accidentally saved into the file). Re-check `head -5 server.js` and `tail -5 server.js`.
-- **401 Unauthorized on API calls:** token missing/expired — log in again via `/login.html`, it's stored in `localStorage`.
-- **SQLite DB not updating:** delete `tiffin.db` and restart server to get a fresh schema (⚠️ wipes data).
-
-## API Endpoints
-
-### Auth
+### Subscription Transfer (T6)
 | Method | Endpoint | Description |
 |---|---|---|
-| POST | `/api/auth/register` | Register a new owner |
-| POST | `/api/auth/login` | Login, returns JWT |
+| POST | `/api/subscriptions/:id/transfer` | Transfer subscription to a new customer mid-cycle. Billing for that month splits between old and new customer based on who was served each day. |
 
-### Customers
+### Notifications (T1)
 | Method | Endpoint | Description |
 |---|---|---|
-| POST | `/api/customers` | Create customer |
-| GET | `/api/customers?search=&page=&limit=&sort=&order=` | List customers (search/paginate/sort) |
-| GET | `/api/customers/:id` | Get single customer + subscriptions |
-| GET | `/api/customers-status/summary` | Active vs Paused vs No-subscription counts |
+| POST | `/api/clock` | Advance simulated "today" (`{date: YYYY-MM-DD}`). Notifies all active, non-paused customers due for delivery that day (weekdays only). Idempotent — repeat calls for the same date don't re-notify. |
+| GET | `/api/outbox?date=YYYY-MM-DD` | View notifications sent (optionally filtered by date). |
 
-### Subscriptions
+### Bulk Import (T4)
 | Method | Endpoint | Description |
 |---|---|---|
-| POST | `/api/subscriptions` | Subscribe customer to a plan |
-| POST | `/api/subscriptions/:id/pause` | Pause service (`start_date`, optional `end_date`) |
-| POST | `/api/subscriptions/:id/resume` | Resume service (`end_date`, defaults to today) |
-| GET | `/api/subscriptions/:id/bill?month=YYYY-MM` | Get pro-rated bill for a month |
-
-## Example API Requests
-
-**Register**
-```bash
-curl -X POST http://localhost:3000/api/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{"name":"Owner","email":"owner@test.com","password":"pass123"}'
-```
-
-**Subscribe**
-```bash
-curl -X POST http://localhost:3000/api/subscriptions \
-  -H "Content-Type: application/json" -H "Authorization: Bearer <TOKEN>" \
-  -d '{"customer_id":1,"plan_name":"Standard Lunch","plan_price":3000,"start_date":"2026-09-01"}'
-```
-
-**Get Bill**
-```bash
-curl -H "Authorization: Bearer <TOKEN>" \
-  "http://localhost:3000/api/subscriptions/1/bill?month=2026-09"
-```
-Response:
-```json
-{
-  "subscription_id": 1,
-  "plan_price": 3000,
-  "month": "2026-09",
-  "eligibleWeekdays": 22,
-  "pausedWeekdays": 3,
-  "servedWeekdays": 19,
-  "dailyRate": 136.36,
-  "bill": 2590.91
-}
-```
-
-## Billing Logic (Business Rule)
-- Only **weekdays (Mon–Fri)** are eligible/billable days.
-- `daily_rate = plan_price / eligible_weekdays_in_month`
-- `served_weekdays = eligible_weekdays - paused_weekdays`
-- `bill = daily_rate × served_weekdays`
-- Weekend pauses have no billing effect (weekends were never billed).
-- Pauses are capped to the subscription's active window within the billed month (handles pause-before-subscription, pause-covering-rest-of-month, etc.). See `REASONING.md` for full edge case handling.
-Test
-Open README.md in preview and check formatting renders correctly.
-
-Commit
-bash
-git add .
-git commit -m "docs: complete README with setup, API list, examples"
-git push
-STEP 9 — REASONING.md
-Important: write this yourself based on what actually happened — I'll give you a skeleton, you fill in specifics (bugs you hit, what you tested). Paste this structure into REASONING.md and fill in the [...] parts honestly:
+| POST | `/api/customers/import` | Bulk import customers from messy data (`{rows: [...]}`). Handles duplicate phones, mixed date formats (`YYYY-MM-DD`, `DD/MM/YYYY`), and missing fields. Returns `{ summary, imported, deduped, rejected }` with reasons for every skipped row. |
+Also add a short note near the Billing Logic section:
 
 markdown
-# Reasoning
+## Twist Features Implemented
+1. **T1 (Notification):** `/api/clock` simulates the passage of a day; on each call, active/non-paused/weekday-due customers get a notification logged to `/api/outbox`. Duplicate calls for the same date are idempotent (DB unique constraint on `subscription_id + delivery_date`).
+2. **T6 (Lifecycle):** `/api/subscriptions/:id/transfer` moves a subscription to a new customer mid-cycle without resetting the plan or start date. Billing is tracked via an ownership-segment table and split day-by-day between old and new customer in the bill response (`splitByCustomer`).
+3. **T4 (Messy Data):** `/api/customers/import` accepts raw rows, normalizes phone numbers and dates (`YYYY-MM-DD` or `DD/MM/YYYY`), rejects invalid/incomplete rows with explicit reasons, and dedupes both within the batch and against existing customers.
+bash
+git add .
+git commit -m "docs: document T1/T6/T4 twist endpoints in README"
+git push
+Say NEXT once done — we'll update REASONING.md with the twist decisions, then run the final full checklist before submission.
 
-## Problem Interpretation
-[e.g. Billing must be based on actual weekdays served, not calendar days. Weekends are never billed regardless of pause status. Ambiguity resolved by treating weekday count as the sole denominator/numerator basis.]
+next
 
-## Requirements Identified
-[List: auth, customer CRUD, subscription, pause/resume, pro-rated billing, search, pagination, sorting, active/paused dashboard, landing page]
+STEP — Update REASONING.md with twist decisions
+Add this section to REASONING.md (append at the end):
 
-## Architecture Decisions
-- Monolith: Express serving both REST API and static frontend files — fastest to build/debug within 2.5hrs, no CORS/deployment complexity.
-- SQLite over Postgres/MySQL: zero setup, file-based, persists across restarts, sufficient for MVP scale.
-- Vanilla JS frontend over React: no build tooling needed, faster to wire up given time constraint.
+markdown
+## Twist Features — Design Decisions
 
-## Database Design Decisions
-- Separate `pauses` table (not a single "paused_until" field on subscription) to support multiple pause/resume cycles per subscription and keep full history for bill verification.
-- `end_date IS NULL` on a pause = currently open/ongoing pause — used to derive live active/paused status instead of a separate mutable status column.
+### T1 — Notification (Level 1)
+- `POST /api/clock` simulates the passage of a day since we can't wait for real mornings during grading. It accepts a date, stores it as the simulated "today," and immediately evaluates which customers are due.
+- A customer is "due" if: their subscription started on/before this date, today is a weekday, and they are not paused on this date (checked via `isPausedOnDate`).
+- Notifications are logged to `notifications_outbox` instead of actually calling an external service — this simulates integration without needing real credentials/API.
+- **Idempotency:** a `UNIQUE(subscription_id, delivery_date)` constraint plus `INSERT OR IGNORE` ensures calling `/clock` twice for the same date never double-notifies. Verified by testing.
+- Transferred subscriptions notify whoever the **current owner** is on that date (uses `subscription_owners` segments), not the original customer.
 
-## Billing Logic
-[Explain the formula, and specifically: how you handled pause-before-subscription, weekend pauses, multi-period pauses, open-ended pauses capped to month-end, etc. — reference the calculateBill function in billing.js]
+### T6 — Subscription Transfer (Level 2)
+- Added a `subscription_owners` table instead of just overwriting `customer_id` on the subscription — this preserves full ownership history, which is required to split a bill correctly when a transfer happens mid-month.
+- Transfer closes the current owner's segment the day before `transfer_date` and opens a new segment for the new customer starting exactly on `transfer_date`.
+- Billing (`calculateBillSplit`) walks day-by-day through the billing window and attributes each served weekday to whichever owner segment was active that day, then computes each customer's share of the bill from their served-day count. Chose a day-by-day walk over date-range math because it's simpler to reason about correctly with multiple transfers in one month, and the dataset size (weekdays in a month) is small enough that performance isn't a concern.
+- Old billing behavior (`calculateBill`) was kept in `billing.js` for reference; the live `/bill` endpoint now always uses the split version, which is backward-compatible — a subscription with only one ownership segment just returns a `splitByCustomer` array with a single entry equal to the full bill.
 
-## Assumptions
-- Only Mon-Fri counted as billable/eligible days.
-- Partial month subscriptions bill from start_date, not the 1st.
-- [add any other assumption you made]
+### T4 — Messy Data Import (Level 3)
+- `normalizePhone` strips all non-digits and keeps the last 10, handling `+91` prefixes and formatting differences; phones under 10 digits are rejected as invalid rather than guessed.
+- `normalizeDate` accepts `YYYY-MM-DD` and `DD/MM/YYYY` (or `DD-MM-YYYY`) explicitly. Any other format is rejected rather than guessed — an incorrectly-guessed date is worse than an explicit rejection with a reason, since it would silently create a wrong subscription start date.
+- Deduplication happens at two levels: within the same import batch (same phone appearing twice in one upload) and against existing customers already in the database — each gets a distinct reason string so the report is actionable.
+- Every skipped row (deduped or rejected) includes a specific, human-readable reason — no silent drops, per the requirement that the report must be an `{imported, deduped, rejected}` breakdown.
+- Import runs inside a single DB transaction so a partial failure can't leave the database in an inconsistent state.
 
-## How I Tested
-[Be honest: list the curl commands you ran, what UI flows you clicked through, what edge cases you actually verified]
-
-## Bugs Encountered & Fixes
-1. [e.g. server.js heredoc paste corrupted the file — fixed by editing directly in VS Code editor instead of terminal heredoc]
-2. [e.g. subscription status column went stale after a closed pause was logged — fixed by deriving status live from open pauses via SQL subquery instead of trusting a stored column]
-3. [any other real issue you hit]
-
-## Trade-offs
-- No refresh token / token expiry handling — 7-day JWT expiry chosen for simplicity, acceptable for MVP.
-- No delete/edit customer endpoints — out of scope for 2.5hr MVP, listed as future work.
-- [any other trade-off you made under time pressure]
-Fill this in with your actual experience (5-10 min), then:
+## Testing (Twists)
+[Fill in honestly: e.g. "Tested T1 by calling /clock for a known weekday and weekend, confirmed dueToday counts and idempotency on repeat calls. Tested T6 by transferring a subscription mid-month and confirming the bill split summed to the same total as before transfer. Tested T4 with a mixed batch of 5 rows covering duplicate phone, missing name, invalid phone, and bad date format, confirmed each was categorized correctly with the right reason."]
+Now open REASONING.md, paste this at the end, and fill in the [Fill in honestly...] bracket with what you actually ran (you already have the exact test commands and outputs above — just summarize them in 2-3 sentences).
 
 bash
 git add .
-git commit -m "docs: add REASONING.md"
+git commit -m "docs: document twist design decisions in REASONING.md"
 git push
-STEP 10 — AI_LOGS.md reminder
-Make sure AI_LOGS.md has the entire conversation, unedited, pasted in before final submission. Do this now if you haven't been updating it continuously — don't leave it for the last 2 minutes.
+
+Say NEXT for the final full mandatory-requirements checklist before submission.
+
+next
+
+FINAL REVIEW — Mandatory Requirements Checklist
+
+Go through this list one by one. For anything marked ⚠️, do the quick check/fix before submitting.
+
+Core Requirements
+#	Requirement	How to verify	Status
+1	Real persistent DB	ls tiffin.db exists, survives restart	✅ done
+2	Sensible schema	users, customers, subscriptions, pauses, subscription_owners, notifications_outbox, clock_state	✅ done
+3	REST APIs for all core ops	listed in README	✅ done
+4	API list in README	check README.md has full endpoint tables	✅ done
+5	Usable UI	login → dashboard → CRUD → subscribe → pause/resume → bill	✅ done (tested)
+6	Registration/Login (JWT)	tested via curl + UI	✅ done
+7	Search by phone	?search= param, tested	✅ done
+8	Pagination	?page=&limit= tested	✅ done
+9	Sorting	?sort=&order= tested	✅ done
+10	Landing page (5 sections)	/index.html — what it is, features, audience, how it helps, 3 next features	✅ done
+11	Correct pro-rated billing	verified math by hand earlier	✅ done
+12	Edge cases handled	pause before sub, weekend pause, multi-pause, resume w/o pause, invalid dates, duplicate pause	✅ done
+Twist Requirements
+#	Requirement	Status
+13	T1 — Clock + Outbox, idempotent	✅ tested, verified
+14	T6 — Transfer + split billing	✅ tested, math verified
+15	T4 — Messy import with report	✅ tested, reasons verified
+⚠️ Things to double-check right now
+
+A. .env must NOT be pushed to GitHub
 
 bash
-git add .
-git commit -m "docs: add AI conversation log"
+git ls-files | grep .env
+
+Should return nothing. If .env shows up, it was committed before .gitignore took effect — remove it:
+
+bash
+git rm --cached .env
+git commit -m "chore: remove accidentally committed .env"
 git push
-Once README, REASONING, and AI_LOGS are done, say NEXT and we'll run the final mandatory-requirements checklist before you submit.
 
+B. Confirm no console errors in browser
+Open dashboard in browser, F12 → Console tab → click through all features once more. Should be clean.
 
+C. Confirm all 3 root files exist and are non-empty
 
+bash
+ls -la README.md REASONING.md AI_LOGS.md
+wc -l README.md REASONING.md AI_LOGS.md
+
+All three should have real content (not 0 lines).
+
+D. AI_LOGS.md — final paste
+If you haven't yet, paste this entire conversation (from your very first message through now) into AI_LOGS.md, unedited.
+
+bash
+git add AI_LOGS.md
+git commit -m "docs: final AI conversation log"
+git push
+
+E. Confirm repo is Public
+Go to https://github.com/Rudra9461/tiffin-billing-system-AurigaIT/settings → scroll to bottom → "Danger Zone" → confirm it says the repo is public (or check the repo main page — no lock icon next to repo name).
+
+F. Final full git check
+
+bash
+git status
+git log --oneline -10
+
+git status should say "nothing to commit, working tree clean". Review the commit log to make sure history looks sensible.
+
+Submit
+
+Repository URL format to submit:
+
+https://github.com/Rudra9461/tiffin-billing-system-AurigaIT
+
+Run checks A through F now, tell me the results of A (the .env check is the most important one — leaked secrets are a real red flag in grading), and confirm once everything is pushed.
