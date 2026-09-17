@@ -6,9 +6,9 @@
 <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-<nav>
-  <div><strong>🍱 Tiffin Billing</strong> — <span id="ownerName"></span></div>
-  <button onclick="logout()">Logout</button>
+<nav class="navbar">
+  <div class="brand">Tiffin Billing — <span id="ownerName"></span></div>
+  <button class="secondary" onclick="logout()">Logout</button>
 </nav>
 
 <div class="container">
@@ -24,14 +24,14 @@
       <input type="text" id="custName" placeholder="Name" />
       <input type="text" id="custPhone" placeholder="Phone" />
       <input type="text" id="custAddress" placeholder="Address" />
-      <button onclick="addCustomer()">Add</button>
+      <button class="primary" onclick="addCustomer()">Add</button>
     </div>
     <div id="custMsg"></div>
   </div>
 
   <div class="card">
     <h3>Customers</h3>
-    <div class="form-row">
+    <div class="form-row search-bar">
       <input type="text" id="searchBox" placeholder="Search by name or phone" oninput="loadCustomers(1)" />
       <select id="sortSelect" onchange="loadCustomers(1)">
         <option value="name">Sort: Name</option>
@@ -66,5 +66,26 @@
 </div>
 
 <script src="app.js"></script>
+<script>
+// Turns plain "Active"/"Paused"/"No Subscription" text in the Status column
+// into colored badges, after app.js renders the table (and after every
+// search/sort/pagination re-render).
+function styleBadges() {
+  document.querySelectorAll('#customerTable tr').forEach(row => {
+    row.querySelectorAll('td').forEach(cell => {
+      if (cell.querySelector('.badge')) return;
+      const raw = cell.textContent.trim();
+      const text = raw.toLowerCase();
+      let cls = null;
+      if (text.includes('no subscription')) cls = 'badge-none';
+      else if (text.includes('active') && !text.includes('inactive')) cls = 'badge-active';
+      else if (text.includes('paused')) cls = 'badge-paused';
+      if (cls) cell.innerHTML = `<span class="badge ${cls}">${raw}</span>`;
+    });
+  });
+}
+window.addEventListener('load', styleBadges);
+setInterval(styleBadges, 800);
+</script>
 </body>
 </html>

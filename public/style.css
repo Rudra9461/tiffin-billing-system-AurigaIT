@@ -310,3 +310,42 @@ footer {
   tbody td { border: none; padding: 8px 14px; }
   tbody td::before { content: attr(data-label); font-weight: 600; color: var(--indigo); display: block; font-size: 0.72rem; }
 }
+
+/* ---------- Catch-all: any link used as a button (e.g. hero CTA) ---------- */
+.hero a,
+a.cta,
+a.button,
+a.btn {
+  display: inline-block;
+  background: var(--turmeric);
+  color: var(--indigo);
+  font-weight: 600;
+  font-size: 0.9rem;
+  padding: 9px 18px;
+  border-radius: 8px;
+  text-decoration: none;
+}
+.hero a:hover,
+a.cta:hover,
+a.button:hover,
+a.btn:hover {
+  background: var(--turmeric-dark);
+  color: #fff;
+}
+
+/* ---------- Small polish ---------- */
+.features .card h3 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.card:hover {
+  box-shadow: 0 4px 12px rgba(31, 51, 71, 0.12);
+  transition: box-shadow 0.15s ease;
+}
+
+/* ---------- Search bar sizing fix ---------- */
+.search-bar input { flex: 2 1 220px; min-width: 180px; }
+.search-bar select { flex: 1 1 140px; min-width: 120px; }
+.form-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.form-row input, .form-row select { width: auto; flex: 1 1 160px; }
