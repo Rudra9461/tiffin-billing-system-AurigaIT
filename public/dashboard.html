@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Dashboard - Tiffin Billing</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<nav>
+  <div><strong>🍱 Tiffin Billing</strong> — <span id="ownerName"></span></div>
+  <button onclick="logout()">Logout</button>
+</nav>
+
+<div class="container">
+
+  <div class="card">
+    <h3>Status Summary</h3>
+    <div id="summary"></div>
+  </div>
+
+  <div class="card">
+    <h3>Add Customer</h3>
+    <div class="form-row">
+      <input type="text" id="custName" placeholder="Name" />
+      <input type="text" id="custPhone" placeholder="Phone" />
+      <input type="text" id="custAddress" placeholder="Address" />
+      <button onclick="addCustomer()">Add</button>
+    </div>
+    <div id="custMsg"></div>
+  </div>
+
+  <div class="card">
+    <h3>Customers</h3>
+    <div class="form-row">
+      <input type="text" id="searchBox" placeholder="Search by name or phone" oninput="loadCustomers(1)" />
+      <select id="sortSelect" onchange="loadCustomers(1)">
+        <option value="name">Sort: Name</option>
+        <option value="phone">Sort: Phone</option>
+        <option value="created_at">Sort: Subscribed Date</option>
+      </select>
+      <select id="orderSelect" onchange="loadCustomers(1)">
+        <option value="asc">Ascending</option>
+        <option value="desc">Descending</option>
+      </select>
+    </div>
+
+    <table>
+      <thead>
+        <tr><th>Name</th><th>Phone</th><th>Address</th><th>Status</th><th>Actions</th></tr>
+      </thead>
+      <tbody id="customerTable"></tbody>
+    </table>
+
+    <div class="pagination">
+      <button onclick="prevPage()">Prev</button>
+      <span id="pageInfo"></span>
+      <button onclick="nextPage()">Next</button>
+    </div>
+  </div>
+
+  <div class="card" id="detailCard" style="display:none">
+    <h3 id="detailTitle"></h3>
+    <div id="detailBody"></div>
+  </div>
+
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
