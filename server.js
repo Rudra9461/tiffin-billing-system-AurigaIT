@@ -116,6 +116,13 @@ app.get('/api/customers/:id', authMiddleware, (req, res) => {
   const subscriptions = db.prepare('SELECT * FROM subscriptions WHERE customer_id = ? ORDER BY id DESC')
     .all(customer.id);
 
+  // Attach full pause history to each subscription so the UI can show every
+  // pause/resume period, not just the current one.
+  const pauseStmt = db.prepare('SELECT * FROM pauses WHERE subscription_id = ? ORDER BY start_date ASC');
+  subscriptions.forEach(sub => {
+    sub.pauses = pauseStmt.all(sub.id);
+  });
+
   res.json({ ...customer, subscriptions });
 });
 

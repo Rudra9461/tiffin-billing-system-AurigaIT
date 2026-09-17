@@ -20,14 +20,15 @@ async function api(url, options = {}) {
 
 let currentPage = 1;
 let totalPages = 1;
+let currentCustomerId = null;
 
 async function loadSummary() {
   try {
     const data = await api('/api/customers-status/summary');
     document.getElementById('summary').innerHTML = `
-      <span class="badge active">Active: ${data.counts.active}</span>
-      &nbsp;<span class="badge paused">Paused: ${data.counts.paused}</span>
-      &nbsp;<span class="badge none">No Subscription: ${data.counts.noSubscription}</span>
+      <span class="badge badge-active">Active: ${data.counts.active}</span>
+      &nbsp;<span class="badge badge-paused">Paused: ${data.counts.paused}</span>
+      &nbsp;<span class="badge badge-none">No Subscription: ${data.counts.noSubscription}</span>
     `;
   } catch (e) { console.error(e); }
 }
@@ -44,16 +45,16 @@ async function loadCustomers(page = currentPage) {
     document.getElementById('pageInfo').innerText = `Page ${data.page} of ${totalPages || 1} (${data.total} total)`;
 
     const rows = data.customers.map(c => {
-      const badge = c.status === 'active' ? '<span class="badge active">Active</span>'
-        : c.status === 'paused' ? '<span class="badge paused">Paused</span>'
-        : '<span class="badge none">No Plan</span>';
+      const badge = c.status === 'active' ? '<span class="badge badge-active">Active</span>'
+        : c.status === 'paused' ? '<span class="badge badge-paused">Paused</span>'
+        : '<span class="badge badge-none">No Plan</span>';
       return `
         <tr>
-          <td>${c.name}</td>
-          <td>${c.phone}</td>
-          <td>${c.address || '-'}</td>
-          <td>${badge}</td>
-          <td><button class="secondary" onclick="viewCustomer(${c.id})">View</button></td>
+          <td data-label="Name">${c.name}</td>
+          <td data-label="Phone">${c.phone}</td>
+          <td data-label="Address">${c.address || '-'}</td>
+          <td data-label="Status">${badge}</td>
+          <td data-label="Actions"><button class="secondary" onclick="viewCustomer(${c.id})">View</button></td>
         </tr>
       `;
     }).join('');
@@ -85,6 +86,7 @@ async function addCustomer() {
 }
 
 async function viewCustomer(id) {
+  currentCustomerId = id;
   const card = document.getElementById('detailCard');
   const body = document.getElementById('detailBody');
   card.style.display = 'block';
@@ -102,21 +104,34 @@ async function viewCustomer(id) {
           <input type="text" id="planName" placeholder="Plan name" value="Standard Lunch" />
           <input type="number" id="planPrice" placeholder="Price" value="3000" />
           <input type="date" id="planStart" />
-          <button onclick="subscribe(${id})">Subscribe</button>
+          <button class="primary" onclick="subscribe(${id})">Subscribe</button>
         </div>
       `;
     } else {
       const sub = c.subscriptions[0];
+
+      let pauseHtml = '<p class="pause-empty">No pauses logged yet.</p>';
+      if (sub.pauses && sub.pauses.length) {
+        pauseHtml = '<ul class="pause-history">' + sub.pauses.map(p => `
+          <li>
+            <span class="pause-dates">${p.start_date} &rarr; ${p.end_date || 'ongoing'}</span>
+            ${!p.end_date ? '<span class="badge badge-paused">Ongoing</span>' : '<span class="badge badge-none">Closed</span>'}
+          </li>
+        `).join('') + '</ul>';
+      }
+
       subHtml = `
         <p><strong>Plan:</strong> ${sub.plan_name} — ₹${sub.plan_price}/month, started ${sub.start_date}</p>
-        <p><strong>Status:</strong> ${sub.status}</p>
+        <p><strong>Status:</strong> <span class="badge ${sub.status === 'paused' ? 'badge-paused' : 'badge-active'}">${sub.status}</span></p>
         <div class="form-row">
           <input type="date" id="pauseStart" title="Pause start" />
           <input type="date" id="pauseEnd" title="Pause end (optional)" />
-          <button onclick="pauseSub(${sub.id})">Pause</button>
+          <button class="primary" onclick="pauseSub(${sub.id})">Pause</button>
           <input type="date" id="resumeDate" title="Resume date" />
-          <button onclick="resumeSub(${sub.id})">Resume</button>
+          <button class="secondary" onclick="resumeSub(${sub.id})">Resume</button>
         </div>
+        <h4 class="pause-history-title">Pause History</h4>
+        ${pauseHtml}
         <div class="form-row">
           <input type="month" id="billMonth" />
           <button onclick="getBill(${sub.id})">Get Bill</button>
@@ -155,6 +170,7 @@ async function pauseSub(subId) {
     msg.innerHTML = '<p class="success">Paused</p>';
     loadCustomers(currentPage);
     loadSummary();
+    if (currentCustomerId) viewCustomer(currentCustomerId);
   } catch (e) { msg.innerHTML = `<p class="error">${e.message}</p>`; }
 }
 
@@ -166,6 +182,7 @@ async function resumeSub(subId) {
     msg.innerHTML = '<p class="success">Resumed</p>';
     loadCustomers(currentPage);
     loadSummary();
+    if (currentCustomerId) viewCustomer(currentCustomerId);
   } catch (e) { msg.innerHTML = `<p class="error">${e.message}</p>`; }
 }
 
